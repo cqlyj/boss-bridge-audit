@@ -280,4 +280,20 @@ contract L1BossBridgeTest is Test {
         assertEq(token.balanceOf(address(user)), 0);
         assertEq(token.balanceOf(address(vault)), depositAmount);
     }
+
+    function testCanTransferFromVaultToVault() public {
+        address attacker = makeAddr("attacker");
+
+        uint256 valueBalance = 100 ether;
+        deal(address(token), address(vault), valueBalance);
+
+        vm.expectEmit(address(tokenBridge));
+        emit Deposit(address(vault), attacker, valueBalance);
+        tokenBridge.depositTokensToL2(address(vault), attacker, valueBalance);
+
+        // can do this forever?
+        vm.expectEmit(address(tokenBridge));
+        emit Deposit(address(vault), attacker, valueBalance);
+        tokenBridge.depositTokensToL2(address(vault), attacker, valueBalance);
+    }
 }
