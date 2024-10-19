@@ -14,22 +14,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
-import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
-import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import { MessageHashUtils } from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
-import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {MessageHashUtils} from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import { L1Vault } from "./L1Vault.sol";
+import {L1Vault} from "./L1Vault.sol";
 
 contract L1BossBridge is Ownable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    // @audit-info should be constant
     uint256 public DEPOSIT_LIMIT = 100_000 ether;
 
-    IERC20 public immutable token;
+    IERC20 public immutable token; // e one bridge per token
     L1Vault public immutable vault;
     mapping(address account => bool isSigner) public signers;
 
@@ -54,6 +55,7 @@ contract L1BossBridge is Ownable, Pausable, ReentrancyGuard {
         _unpause();
     }
 
+    // q what happens if we disable an account mid-flight?
     function setSigner(address account, bool enabled) external onlyOwner {
         signers[account] = enabled;
     }
@@ -62,33 +64,52 @@ contract L1BossBridge is Ownable, Pausable, ReentrancyGuard {
      * @notice Locks tokens in the vault and emits a Deposit event
      * the unlock event will trigger the L2 minting process. There are nodes listening
      * for this event and will mint the corresponding tokens on L2. This is a centralized process.
-     * 
+     *
      * @param from The address of the user who is depositing tokens
      * @param l2Recipient The address of the user who will receive the tokens on L2
      * @param amount The amount of tokens to deposit
      */
-    function depositTokensToL2(address from, address l2Recipient, uint256 amount) external whenNotPaused {
+
+    // A: apporve token => bridge
+    // before A depositTokensToL2
+    // B: depositTokensToL2(fron: A, l2Recipient: B, amount: All A's money)
+    // @audit-high If a user approve the bridge, any other users can steal the user's money
+
+    // q if the vault approve the bridge, can a user steal money from the vault?
+    // @audit-high if the vault approve the bridge, can a user steal money from the vault?
+    function depositTokensToL2(
+        address from,
+        address l2Recipient,
+        uint256 amount
+    ) external whenNotPaused {
         if (token.balanceOf(address(vault)) + amount > DEPOSIT_LIMIT) {
             revert L1BossBridge__DepositLimitReached();
         }
         token.safeTransferFrom(from, address(vault), amount);
 
         // Our off-chain service picks up this event and mints the corresponding tokens on L2
+        // @audit-info should follow CEI
         emit Deposit(from, l2Recipient, amount);
     }
 
     /*
      * @notice This is the function responsible for withdrawing tokens from L2 to L1.
      * Our L2 will have a similar mechanism for withdrawing tokens from L1 to L2.
-     * @notice The signature is required to prevent replay attacks. 
-     * 
+     * @notice The signature is required to prevent replay attacks.
+     *
      * @param to The address of the user who will receive the tokens on L1
      * @param amount The amount of tokens to withdraw
      * @param v The v value of the signature
      * @param r The r value of the signature
      * @param s The s value of the signature
      */
-    function withdrawTokensToL1(address to, uint256 amount, uint8 v, bytes32 r, bytes32 s) external {
+    function withdrawTokensToL1(
+        address to,
+        uint256 amount,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external {
         sendToL1(
             v,
             r,
@@ -96,7 +117,10 @@ contract L1BossBridge is Ownable, Pausable, ReentrancyGuard {
             abi.encode(
                 address(token),
                 0, // value
-                abi.encodeCall(IERC20.transferFrom, (address(vault), to, amount))
+                abi.encodeCall(
+                    IERC20.transferFrom,
+                    (address(vault), to, amount)
+                )
             )
         );
     }
@@ -109,16 +133,29 @@ contract L1BossBridge is Ownable, Pausable, ReentrancyGuard {
      * @param s The s value of the signature
      * @param message The message/data to be sent to L1 (can be blank)
      */
-    function sendToL1(uint8 v, bytes32 r, bytes32 s, bytes memory message) public nonReentrant whenNotPaused {
-        address signer = ECDSA.recover(MessageHashUtils.toEthSignedMessageHash(keccak256(message)), v, r, s);
+    function sendToL1(
+        uint8 v,
+        bytes32 r,
+        bytes32 s,
+        bytes memory message
+    ) public nonReentrant whenNotPaused {
+        address signer = ECDSA.recover(
+            MessageHashUtils.toEthSignedMessageHash(keccak256(message)),
+            v,
+            r,
+            s
+        );
 
         if (!signers[signer]) {
             revert L1BossBridge__Unauthorized();
         }
 
-        (address target, uint256 value, bytes memory data) = abi.decode(message, (address, uint256, bytes));
+        (address target, uint256 value, bytes memory data) = abi.decode(
+            message,
+            (address, uint256, bytes)
+        );
 
-        (bool success,) = target.call{ value: value }(data);
+        (bool success, ) = target.call{value: value}(data);
         if (!success) {
             revert L1BossBridge__CallFailed();
         }
