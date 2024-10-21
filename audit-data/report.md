@@ -36,9 +36,6 @@ Assisting Auditors:
 
 - None
 
-# Table of Contents
-
-- [Table of Contents](#table-of-contents)
 - [About LUO YINGJIE](#about-luo-yingjie)
 - [Protocol Summary](#protocol-summary)
 - [Disclaimer](#disclaimer)
@@ -48,6 +45,24 @@ Assisting Auditors:
   - [Roles](#roles)
 - [Executive Summary](#executive-summary)
   - [Issues found](#issues-found)
+- [Findings](#findings)
+  - [High](#high)
+    - [\[H-1\] Users who give tokens approvals to `L1BossBridge` may have those assets stolen](#h-1-users-who-give-tokens-approvals-to-l1bossbridge-may-have-those-assets-stolen)
+    - [\[H-2\] Calling `depositTokensToL2` from the Vault contract to the Vault contract allows infinite minting of unbacked tokens](#h-2-calling-deposittokenstol2-from-the-vault-contract-to-the-vault-contract-allows-infinite-minting-of-unbacked-tokens)
+    - [\[H-3\] Lack of replay protection in `withdrawTokensToL1` allows withdrawals by signature to be replayed](#h-3-lack-of-replay-protection-in-withdrawtokenstol1-allows-withdrawals-by-signature-to-be-replayed)
+    - [\[H-4\] `L1BossBridge::sendToL1` allowing arbitrary calls enables users to call `L1Vault::approveTo` and give themselves infinite allowance of vault funds](#h-4-l1bossbridgesendtol1-allowing-arbitrary-calls-enables-users-to-call-l1vaultapproveto-and-give-themselves-infinite-allowance-of-vault-funds)
+    - [\[H-5\] `CREATE` opcode does not work on zksync era](#h-5-create-opcode-does-not-work-on-zksync-era)
+    - [\[H-6\] `L1BossBridge::depositTokensToL2`'s `DEPOSIT_LIMIT` check allows contract to be DoS'd](#h-6-l1bossbridgedeposittokenstol2s-deposit_limit-check-allows-contract-to-be-dosd)
+    - [\[H-7\] The `L1BossBridge::withdrawTokensToL1` function has no validation on the withdrawal amount being the same as the deposited amount in `L1BossBridge::depositTokensToL2`, allowing attacker to withdraw more funds than deposited](#h-7-the-l1bossbridgewithdrawtokenstol1-function-has-no-validation-on-the-withdrawal-amount-being-the-same-as-the-deposited-amount-in-l1bossbridgedeposittokenstol2-allowing-attacker-to-withdraw-more-funds-than-deposited)
+    - [\[H-8\] `TokenFactory::deployToken` locks tokens forever](#h-8-tokenfactorydeploytoken-locks-tokens-forever)
+  - [Medium](#medium)
+    - [\[M-1\] Withdrawals are prone to unbounded gas consumption due to return bombs](#m-1-withdrawals-are-prone-to-unbounded-gas-consumption-due-to-return-bombs)
+  - [Low](#low)
+    - [\[L-1\] Lack of event emission during withdrawals and sending tokesn to L1](#l-1-lack-of-event-emission-during-withdrawals-and-sending-tokesn-to-l1)
+    - [\[L-2\] `TokenFactory::deployToken` can create multiple token with same `symbol`](#l-2-tokenfactorydeploytoken-can-create-multiple-token-with-same-symbol)
+    - [\[L-3\] Unsupported opcode PUSH0](#l-3-unsupported-opcode-push0)
+  - [Informational](#informational)
+    - [\[I-1\] Insufficient test coverage](#i-1-insufficient-test-coverage)
 
 # About LUO YINGJIE
 
